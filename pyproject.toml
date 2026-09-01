@@ -1,0 +1,9 @@
+[project]
+name = "recurrent-optimization"
+version = "0.1.0"
+description = "Small experiments in optimization through recurrent MLPs."
+requires-python = ">=3.11"
+dependencies = ["numpy>=2", "torch>=2.7"]
+
+[tool.uv]
+package = false
