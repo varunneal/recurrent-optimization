@@ -1,11 +1,22 @@
 """Learn sin(x) with one weight-tied MLP and fixed soft RMS clipping."""
 
-import argparse
 import math
 
 import torch
 from torch import nn
 from torch.nn import functional as F
+
+
+DIM = 64
+LOOPS = 8
+MAX_B = 24 * math.pi
+STEPS = 13_000
+TRAIN_POINTS = 1025
+EVAL_POINTS = 4097
+LEARNING_RATE = 1e-3
+WEIGHT_DECAY = 1e-4
+TAU = 4.0
+SEED = 0
 
 
 class LoopedMLP(nn.Module):
@@ -40,9 +51,7 @@ def data(b: float, points: int, device: torch.device) -> tuple[torch.Tensor, tor
     return x, x.sin()
 
 
-def device_from(name: str) -> torch.device:
-    if name != "auto":
-        return torch.device(name)
+def default_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     if torch.backends.mps.is_available():
@@ -51,41 +60,26 @@ def device_from(name: str) -> torch.device:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dim", type=int, default=64)
-    parser.add_argument("--loops", type=int, default=8)
-    parser.add_argument("--max-b", type=float, default=24 * math.pi)
-    parser.add_argument("--steps", type=int, default=13_000)
-    parser.add_argument("--points", type=int, default=1025)
-    parser.add_argument("--eval-points", type=int, default=4097)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
-    parser.add_argument("--tau", type=float, default=4.0)
-    parser.add_argument("--device", default="auto")
-    parser.add_argument("--seed", type=int, default=0)
-    args = parser.parse_args()
+    torch.manual_seed(SEED)
+    device = default_device()
+    model = LoopedMLP(DIM, TAU).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-    torch.manual_seed(args.seed)
-    device = device_from(args.device)
-    model = LoopedMLP(args.dim, args.tau).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    eval_every = max(args.steps // 10, 1)
-
-    for step in range(1, args.steps + 1):
-        progress = (step - 1) / max(args.steps - 1, 1)
-        b = ramp(math.pi, args.max_b, progress, fraction=0.6)
-        loops = round(ramp(1, args.loops, progress, fraction=0.2))
-        x, y = data(b, args.points, device)
+    for step in range(1, STEPS + 1):
+        progress = (step - 1) / (STEPS - 1)
+        b = ramp(math.pi, MAX_B, progress, fraction=0.6)
+        loops = round(ramp(1, LOOPS, progress, fraction=0.2))
+        x, y = data(b, TRAIN_POINTS, device)
 
         loss = F.mse_loss(model(x, loops), y)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
-        if step == 1 or step % eval_every == 0 or step == args.steps:
+        if step == 1 or step % (STEPS // 10) == 0 or step == STEPS:
             with torch.no_grad():
-                x_val, y_val = data(args.max_b, args.eval_points, device)
-                mse = F.mse_loss(model(x_val, args.loops), y_val)
+                x_val, y_val = data(MAX_B, EVAL_POINTS, device)
+                mse = F.mse_loss(model(x_val, LOOPS), y_val)
             print(f"step {step:5d}  b {b / math.pi:5.1f}pi  loops {loops:2d}  mse {mse.item():.6g}")
 
 
