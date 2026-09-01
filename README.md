@@ -10,3 +10,4 @@ Looping a single MLP to learn $\sin(x)$ on $[-2\pib, 2\pib]$.
 ```bash
 uv run experiment.py
 ```
+![[sinx.png]]
