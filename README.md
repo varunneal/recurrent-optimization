@@ -1,6 +1,6 @@
 # recurrent-optimization
 
-Looping a single MLP to learn functions over increasingly large domains.
+Looping a single MLP to learn $\sin(x)$ on $[-2\pib, 2\pib]$.  
 
 | Record | Max $b$ | Recurrent depth | Description |
 |---:|---:|---:|---|
